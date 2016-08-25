@@ -9,11 +9,13 @@
 而本slice_range插件主要是添加了源站不支持range的情况以及处理了trunked的情况；
 
 3.本插件和nginx slice插件配合使用，则更佳；如果配合nginx使用，具体如下：
+
 比如nginx设置的slice为2m，那么每个分片是2M。
-nginx一开始并不知道要发几个range子请求，它会根据配置的slice 2m;，先发起一个2m的range请求，这个请求返回的Content-range头会给出文件总长度，这样nginx就知道一共需要发几个range请求来取完所有内容。
+nginx一开始并不知道要发几个range子请求，它会根据配置的slice 2m;先发起一个2m的range请求，这个请求返回的Content-range头会给出文件总长度，这样nginx就知道一共需要发几个range请求来取完所有内容。
 假如原始range请求的访问是0.8M-5.3M，即，这个range请求会在nginx内部被转变成r1(0-2M)、r2(2-4M)、r3(4-6M)三子请求，顺序分别发送到ats上；
 Nginx内部实现方法是：
-1.首先发送range 为r1(0-2M)的子请求，则在响应头中包含Content-Range: bytes 0- 2097152/(content_length)，content_length为源站整个文档的长度。Nginx根据content_length作出相应处理。
+1.首先发送range 为r1(0-2M)的子请求，则在响应头中包含Content-Range: bytes 0- 2097152/(content_length)，content_length为源站整个文档的长度。
+Nginx根据content_length作出相应处理。
 如果content_length<4M，则只需要继续发送r2即可；
 如果content_length>5.3，则继续发送r2,r3三个子请求，不过是顺序发送；
 Nginx收到这三个子请求后，再进行合并处理，将0.8M-5.3M内容发送到client；
