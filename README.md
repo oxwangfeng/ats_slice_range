@@ -1,16 +1,22 @@
 # ats_slice_range
 
-1.Txndata贯穿到整个range session。当一个http range请求到来时，就会产生生成一个txndata实例；当range session结束时，这个txndata就会被销毁；
-
-2. 源站不支持range（可以通过设置max_ranges指令为0来表示源站不支持range）：
+1. 源站不支持range（可以通过设置max_ranges指令为0来表示源站不支持range）：
 当一个range请求访问不支持range的源站时，会返回整个内容，状态码是200（非206）；
 这时，需要对源站内容进行进行修剪（只需要返回range需要的内容，而不是整个内容）；
 
-3.本slice_range插件在官方提供的cache_range_requests插件基础上进行了修改。cache_range_requests插件主要是将range url进行rewrite，生成新的cache key（range范围不同cache key也不一样）；当发送到源站的url是带有range的；源站返回206状态码，由于206是ats是不缓存的，所以我们将206修改成200，这样就能cache了（按照以前设计的cache key保存）;
+2.本slice_range插件在官方提供的cache_range_requests插件基础上进行了修改。cache_range_requests插件主要是将range url进行rewrite，生成新的cache key（range范围不同cache key也不一样）；当发送到源站的url是带有range的；源站返回206状态码，由于206是ats是不缓存的，所以我们将206修改成200，这样就能cache了（按照以前设计的cache key保存）;
 
 而本slice_range插件主要是添加了源站不支持range的情况以及处理了trunked的情况；
 
-4.本插件和nginx slice插件配合使用，则更佳；
+3.本插件和nginx slice插件配合使用，则更佳；如果配合nginx使用，具体如下：
+比如nginx设置的slice为2m，那么每个分片是2M。
+nginx一开始并不知道要发几个range子请求，它会根据配置的slice 2m;，先发起一个2m的range请求，这个请求返回的Content-range头会给出文件总长度，这样nginx就知道一共需要发几个range请求来取完所有内容。
+假如原始range请求的访问是0.8M-5.3M，即，这个range请求会在nginx内部被转变成r1(0-2M)、r2(2-4M)、r3(4-6M)三子请求，顺序分别发送到ats上；
+Nginx内部实现方法是：
+1.首先发送range 为r1(0-2M)的子请求，则在响应头中包含Content-Range: bytes 0- 2097152/(content_length)，content_length为源站整个文档的长度。Nginx根据content_length作出相应处理。
+如果content_length<4M，则只需要继续发送r2即可；
+如果content_length>5.3，则继续发送r2,r3三个子请求，不过是顺序发送；
+Nginx收到这三个子请求后，再进行合并处理，将0.8M-5.3M内容发送到client；
  
  
 Slice_range的程序框架：
@@ -28,3 +34,8 @@ Slice_range的程序框架：
 6.1 只有第一次回源才返回trunked（下一次回源并且源站有修改时，也可能返回trunked），由于响应头中不包含content-length（trunked与content-length是互斥的），所以无法采用transformation的办法处理；
 6.2 虽然是range请求，但是由于响应是trunked，并且响应状态码是200，所以缓存存储的是整个文档，而不是一个片段；所以每次返回给客户端必须是200状态码，不能是206，因为返回的是整个文档；
 7.发送响应头阶段：如果cache中状态码是200，那么修改成206返回给client；是自己写的ats的插件，用于解决ats的range 分片存储，相比官方提供的range插件功能更多，也更全面。
+
+框架图：
+http://blog.chinaunix.net/uid-13776576-id-5749765.html
+
+
