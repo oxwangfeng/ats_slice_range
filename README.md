@@ -40,4 +40,6 @@ Slice_range的程序框架：
 框架图：
 http://blog.chinaunix.net/uid-13776576-id-5749765.html
 
+如有疑问，请联系：王锋 oxwangfeng@qq.com
+
 
