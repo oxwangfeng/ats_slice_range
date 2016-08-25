@@ -1,16 +1,16 @@
 # ats_slice_range
-这个1. Txndata贯穿到整个range session。当一个http range请求到来时，就会产生生成一个txndata实例；当range session结束时，这个txndata就会被销毁；
+1.Txndata贯穿到整个range session。当一个http range请求到来时，就会产生生成一个txndata实例；当range session结束时，这个txndata就会被销毁；
 2. 源站不支持range（可以通过设置max_ranges指令为0来表示源站不支持range）：
 当一个range请求访问不支持range的源站时，会返回整个内容，状态码是200（非206）；
 这时，需要对源站内容进行进行修剪（只需要返回range需要的内容，而不是整个内容）；
 3.本slice_range插件在官方提供的cache_range_requests插件基础上进行了修改。cache_range_requests插件主要是将range url进行rewrite，生成新的cache key（range范围不同cache key也不一样）；当发送到源站的url是带有range的；源站返回206状态码，由于206是ats是不缓存的，所以我们将206修改成200，这样就能cache了（按照以前设计的cache key保存）;
-         而本slice_range插件主要是添加了源站不支持range的情况以及处理了trunked的情况；
+而本slice_range插件主要是添加了源站不支持range的情况以及处理了trunked的情况；
 4.本插件和nginx slice插件配合使用，则更佳；
  
  
 Slice_range的程序框架：
  
-1.      当一个range请求到来时，根据请求头部range:bytes=start-end，提取出range的start和end；
+1. 当一个range请求到来时，根据请求头部range:bytes=start-end，提取出range的start和end；
 1.1 start和end如果都存在的话，必须是数字，如果不是数字，则range不合法；range不合法，则可以发送给客户端416；
 1.2 end可以是不存在的；
 2. 设置新的url cache key； cache key url的设计规则为：比如http range请求是http://www.jd.com/vidio.swf  --H "range:bytes=100-200"，那么cache key url设计为http://www.jd.com/vidio.html-bytes=100-200，并且去掉range头部（去掉range头部主要是为了以后查找cache使用）；
